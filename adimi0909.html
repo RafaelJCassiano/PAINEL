@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Saneamento</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-900 text-gray-100 font-sans flex h-screen overflow-hidden">
+
+    <div id="tela-login" class="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center">
+        <div class="bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-2xl w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center text-white">Acesso Restrito</h2>
+            <div class="mb-4">
+                <label class="block text-xs text-gray-400 uppercase font-semibold mb-1">E-mail do Gestor</label>
+                <input type="email" id="login-email" placeholder="gestor@email.com" class="w-full p-3 rounded bg-slate-950 border border-slate-600 focus:border-[#0056b3] focus:outline-none text-white">
+            </div>
+            <div class="mb-6">
+                <label class="block text-xs text-gray-400 uppercase font-semibold mb-1">Senha</label>
+                <input type="password" id="login-senha" placeholder="••••••••" class="w-full p-3 rounded bg-slate-950 border border-slate-600 focus:border-[#0056b3] focus:outline-none text-white">
+            </div>
+            <button onclick="fazerLogin()" class="w-full bg-[#0056b3] hover:bg-blue-700 text-white font-bold p-3 rounded transition shadow-lg">
+                Entrar no Painel
+            </button>
+        </div>
+    </div>
+
+    <div id="sidebar" class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col hidden">
+        <div class="p-6 border-b border-slate-700">
+            <h1 class="text-xl font-extrabold text-blue-500 tracking-wider">AUDITA<span class="text-white">SANE</span></h1>
+            <p id="usuario-logado" class="text-xs text-gray-400 mt-1 truncate">...</p>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="mudarAba('dashboard')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-700 transition flex items-center gap-3">
+                📊 Visão Geral
+            </button>
+            <button onclick="mudarAba('atribuir')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-700 transition flex items-center gap-3">
+                📋 Atribuir Rotas
+            </button>
+            <button onclick="mudarAba('monitoramento')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-700 transition flex items-center gap-3">
+                📡 Monitoramento Real
+            </button>
+            <button onclick="mudarAba('equipe')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-700 transition flex items-center gap-3">
+                👥 Equipe
+            </button>
+        </nav>
+        <div class="p-4 border-t border-slate-700">
+            <button onclick="fazerLogout()" class="w-full bg-red-600/20 text-red-500 hover:bg-red-600/40 py-2 rounded font-bold transition">
+                Sair do Sistema
+            </button>
+        </div>
+    </div>
+
+    <div id="conteudo-principal" class="flex-1 flex flex-col bg-slate-950 hidden">
+        <header class="bg-slate-800 h-16 border-b border-slate-700 flex items-center px-8 shadow">
+            <h2 id="titulo-pagina" class="text-xl font-bold text-white">Visão Geral</h2>
+        </header>
+
+        <main class="flex-1 p-6 overflow-y-auto">
+            
+            <div id="aba-dashboard" class="aba-conteudo space-y-6 block">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md">
+                        <p class="text-sm text-gray-400 font-semibold uppercase">Tarefas Ativas</p>
+                        <p class="text-4xl font-bold text-white mt-2" id="dash-tarefas">0</p>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md">
+                        <p class="text-sm text-gray-400 font-semibold uppercase">Leituras Pendentes</p>
+                        <p class="text-4xl font-bold text-amber-500 mt-2" id="dash-pendentes">0</p>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md">
+                        <p class="text-sm text-gray-400 font-semibold uppercase">Leituras Concluídas</p>
+                        <p class="text-4xl font-bold text-emerald-500 mt-2" id="dash-concluidas">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="aba-atribuir" class="aba-conteudo hidden max-w-2xl bg-slate-800 p-6 rounded-xl border border-slate-700 shadow">
+                <h3 class="text-lg font-bold text-white mb-4">Criar Nova Tarefa de Leitura</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">1. Selecione o Leiturista Responsável</label>
+                        <select id="select-leiturista" class="w-full p-3 rounded bg-slate-900 border border-slate-600 text-white focus:outline-none">
+                            <option value="">Carregando equipe...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">2. Importe a Planilha do Roteiro (.xlsx)</label>
+                        <input type="file" id="upload-roteiro" accept=".xlsx" class="w-full p-3 rounded bg-slate-900 border border-slate-600 text-gray-300">
+                    </div>
+                    <button id="btn-enviar-rota" onclick="processarEEnviarRota()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 font-bold rounded text-white transition">
+                        Gerar Tarefa e Enviar para Nuvem
+                    </button>
+                </div>
+            </div>
+
+            <div id="aba-monitoramento" class="aba-conteudo hidden space-y-4">
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow">
+                    <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                        <h3 class="font-bold">Últimas Leituras Recebidas</h3>
+                        <button onclick="carregarLeiturasRecentes()" class="text-sm bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded">🔄 Atualizar</button>
+                    </div>
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-900/50 text-gray-400">
+                            <tr>
+                                <th class="p-3">Código</th>
+                                <th class="p-3">Endereço</th>
+                                <th class="p-3">Hidrômetro</th>
+                                <th class="p-3">Leitura Anterior</th>
+                                <th class="p-3">Leitura Atual</th>
+                                <th class="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-leituras" class="divide-y divide-slate-700/50 text-gray-300">
+                            <tr>
+                                <td colspan="6" class="p-4 text-center text-gray-500 italic">Nenhum dado carregado.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="aba-equipe" class="aba-conteudo hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow h-fit">
+                    <h3 class="text-base font-bold text-white mb-4">👤 Cadastrar Novo Leiturista</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase font-semibold mb-1">Nome Completo</label>
+                            <input type="text" id="reg-nome" placeholder="Nome do Funcionário" class="w-full p-3 rounded bg-slate-950 border border-slate-600 focus:outline-none text-white text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase font-semibold mb-1">Matrícula (Exatamente 6 números)</label>
+                            <input type="text" id="reg-matricula" placeholder="Ex: 123456" maxlength="6" class="w-full p-3 rounded bg-slate-950 border border-slate-600 focus:outline-none text-white text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase font-semibold mb-1">Senha de Acesso (App)</label>
+                            <input type="password" id="reg-senha" placeholder="Mínimo 6 caracteres" class="w-full p-3 rounded bg-slate-950 border border-slate-600 focus:outline-none text-white text-sm">
+                        </div>
+                        <button id="btn-cadastrar-leiturista" onclick="cadastrarLeiturista()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded transition text-sm mt-2">
+                            Cadastrar Funcionário
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow lg:col-span-2">
+                    <h3 class="text-base font-bold text-white mb-4">👥 Equipe de Campo Registrada</h3>
+                    <div class="overflow-hidden rounded-lg border border-slate-700">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-900 text-xs uppercase text-gray-400 tracking-wider border-b border-slate-700">
+                                    <th class="p-4">Nome</th>
+                                    <th class="p-4">Matrícula</th>
+                                    <th class="p-4">Senha Cadastrada</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-equipe-corpo" class="divide-y divide-slate-700 text-gray-300">
+                                <tr>
+                                    <td colspan="3" class="p-4 text-center text-gray-500 italic">Carregando lista...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://nofrvrtwbndomtsoetkp.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZnJ2cnR3Ym5kb210c29ldGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NTgzNDIsImV4cCI6MjA5NzEzNDM0Mn0.V7Eo-L0ehG1oJ_Q1BkHS19LtYAKaoOoX5Pz6OltgkT0';
+        
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // NAVEGAÇÃO ENTRE ABAS
+        function mudarAba(nomeAba) {
+            document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`aba-${nomeAba}`).classList.remove('hidden');
+            
+            const titulos = {
+                'dashboard': 'Visão Geral',
+                'atribuir': 'Atribuir Rotas à Equipe',
+                'monitoramento': 'Monitoramento de Campo',
+                'equipe': 'Gestão da Equipe'
+            };
+            document.getElementById('titulo-pagina').innerText = titulos[nomeAba];
+
+            if(nomeAba === 'monitoramento') {
+                carregarLeiturasRecentes();
+            }
+            if(nomeAba === 'equipe' || nomeAba === 'atribuir') {
+                carregarLeituristas();
+            }
+        }
+
+        // CONTROLE DE SESSÃO DO GESTOR
+        async function verificarSessao() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                document.getElementById('tela-login').classList.add('hidden');
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('conteudo-principal').classList.remove('hidden');
+                document.getElementById('usuario-logado').innerText = session.user.email;
+                carregarLeituristas();
+            } else {
+                document.getElementById('tela-login').classList.remove('hidden');
+                document.getElementById('sidebar').classList.add('hidden');
+                document.getElementById('conteudo-principal').classList.add('hidden');
+            }
+        }
+
+        async function fazerLogin() {
+            const email = document.getElementById('login-email').value;
+            const senha = document.getElementById('login-senha').value;
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+                if (error) {
+                    alert("Erro no Login: " + error.message);
+                } else {
+                    verificarSessao();
+                }
+            } catch (err) {
+                alert("Erro ao conectar: " + err.message);
+            }
+        }
+
+        async function fazerLogout() {
+            await supabaseClient.auth.signOut();
+            verificarSessao();
+        }
+
+        // CARREGAR LISTAS DE LEITURISTAS COM BOTÃO DE EXCLUSÃO
+        async function carregarLeituristas() {
+            const { data, error } = await supabaseClient
+                .from('perfis')
+                .select('*')
+                .eq('cargo', 'leiturista');
+                
+            const select = document.getElementById('select-leiturista');
+            if (select) {
+                if (data && data.length > 0) {
+                    select.innerHTML = '<option value="">-- Escolha um Leiturista --</option>';
+                    data.forEach(user => {
+                        select.innerHTML += `<option value="${user.id}">${user.nome}</option>`;
+                    });
+                } else {
+                    select.innerHTML = '<option value="">Nenhum leiturista cadastrado</option>';
+                }
+            }
+
+            const tabelaEquipe = document.getElementById('tabela-equipe-corpo');
+            if (tabelaEquipe) {
+                if (data && data.length > 0) {
+                    tabelaEquipe.innerHTML = '';
+                    data.forEach(user => {
+                        tabelaEquipe.innerHTML += `
+                            <tr class="hover:bg-slate-900 border-b border-slate-700">
+                                <td class="p-4 font-semibold text-white">${user.nome}</td>
+                                <td class="p-4 font-mono text-amber-400">${user.matricula || '-'}</td>
+                                <td class="p-4 flex items-center justify-between">
+                                    <span class="text-gray-400 font-mono">${user.senha_app || '******'}</span>
+                                    <button onclick="excluirLeiturista('${user.id}')" class="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1 rounded text-xs font-bold transition">Apagar</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tabelaEquipe.innerHTML = `
+                        <tr>
+                            <td colspan="3" class="p-4 text-center text-gray-500 italic">Nenhum leiturista cadastrado ainda.</td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        // EXCLUIR LEITURISTA
+        async function excluirLeiturista(id) {
+            if (confirm("ATENÇÃO: Tem certeza que deseja apagar este leiturista? Essa ação não pode ser desfeita.")) {
+                const { error } = await supabaseClient
+                    .from('perfis')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) {
+                    alert("Erro ao excluir funcionário: " + error.message);
+                } else {
+                    alert("Funcionário excluído com sucesso!");
+                    carregarLeituristas();
+                }
+            }
+        }
+
+        // CADASTRO DE FUNCIONÁRIO DIRETO NO BANCO
+        async function cadastrarLeiturista() {
+            const nome = document.getElementById('reg-nome').value.trim();
+            const matricula = document.getElementById('reg-matricula').value.trim();
+            const senha = document.getElementById('reg-senha').value;
+            const btn = document.getElementById('btn-cadastrar-leiturista');
+
+            if (!nome || !matricula || !senha) {
+                alert("Por favor, preencha todos os campos do formulário.");
+                return;
+            }
+
+            const regexMatricula = /^\d{6}$/;
+            if (!regexMatricula.test(matricula)) {
+                alert("A matrícula deve conter exatamente 6 números numéricos (ex: 123456).");
+                return;
+            }
+
+            if (senha.length < 6) {
+                alert("A senha precisa ter no mínimo 6 dígitos.");
+                return;
+            }
+
+            btn.innerText = "⏳ Cadastrando...";
+            btn.disabled = true;
+
+            try {
+                const { data: existente } = await supabaseClient
+                    .from('perfis')
+                    .select('matricula')
+                    .eq('matricula', matricula)
+                    .maybeSingle();
+
+                if (existente) {
+                    alert("Aviso: Já existe um funcionário cadastrado com esta matrícula!");
+                    return;
+                }
+
+                const novoId = crypto.randomUUID();
+
+                const { error: perfilErro } = await supabaseClient
+                    .from('perfis')
+                    .insert([{
+                        id: novoId,
+                        nome: nome,
+                        matricula: matricula,
+                        cargo: 'leiturista',
+                        senha_app: senha 
+                    }]);
+
+                if (perfilErro) throw perfilErro;
+
+                alert(`Sucesso total!\n\nFuncionário cadastrado direto no servidor de dados.\nMatrícula: ${matricula}\nSenha: ${senha}`);
+                
+                document.getElementById('reg-nome').value = '';
+                document.getElementById('reg-matricula').value = '';
+                document.getElementById('reg-senha').value = '';
+                
+                carregarLeituristas();
+
+            } catch (err) {
+                alert("Falha ao registrar: " + err.message);
+            } finally {
+                btn.innerText = "Cadastrar Funcionário";
+                btn.disabled = false;
+            }
+        }
+
+        // MONITORAMENTO DE LEITURAS EM TEMPO REAL
+        async function carregarLeiturasRecentes() {
+            const { data, error } = await supabaseClient
+                .from('leituras')
+                .select('*')
+                .order('atualizado_em', { ascending: false })
+                .limit(50);
+            
+            const tabelaCorpo = document.getElementById('tabela-leituras');
+            if (data && data.length > 0) {
+                tabelaCorpo.innerHTML = '';
+                data.forEach(item => {
+                    const statusCor = item.status === 'concluido' ? 'text-emerald-400 font-bold' : 'text-amber-400 animate-pulse';
+                    tabelaCorpo.innerHTML += `
+                        <tr class="hover:bg-slate-900/50 border-b border-slate-700/50">
+                            <td class="p-3 font-mono">${item.codigo}</td>
+                            <td class="p-3">${item.endereco}</td>
+                            <td class="p-3">${item.hidrometro}</td>
+                            <td class="p-3 text-gray-500">${item.leitura_anterior || 0}</td>
+                            <td class="p-3 text-white">${item.leitura_atual || '-'}</td>
+                            <td class="p-3 ${statusCor}">${item.status.toUpperCase()}</td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        // AGREGADOR E INSERÇÃO EM BULK DE PLANILHAS EXCEL
+        async function processarEEnviarRota() {
+            const leituristaId = document.getElementById('select-leiturista').value;
+            const arquivoInput = document.getElementById('upload-roteiro');
+            const btnEnviar = document.getElementById('btn-enviar-rota');
+
+            if (!leituristaId) {
+                alert("Por favor, selecione um leiturista.");
+                return;
+            }
+            if (arquivoInput.files.length === 0) {
+                alert("Por favor, selecione um arquivo Excel.");
+                return;
+            }
+
+            btnEnviar.innerText = "⏳ Processando e Enviando...";
+            btnEnviar.disabled = true;
+
+            const arquivo = arquivoInput.files[0];
+            const leitor = new FileReader();
+
+            leitor.onload = async function(e) {
+                try {
+                    const dados = new Uint8Array(e.target.result);
+                    const pastaTrabalho = XLSX.read(dados, { type: 'array' });
+                    const primeiraAba = pastaTrabalho.Sheets[pastaTrabalho.SheetNames[0]];
+                    const jsonDados = XLSX.utils.sheet_to_json(primeiraAba, { range: 1, defval: "" });
+
+                    const { data: tarefaCriada, error: erroTarefa } = await supabaseClient
+                        .from('tarefas')
+                        .insert([{ 
+                            leiturista_id: leituristaId, 
+                            status: 'em_andamento',
+                            criado_em: new Date().toISOString()
+                        }])
+                        .select()
+                        .single();
+
+                    if (erroTarefa) throw erroTarefa;
+
+                    const loteLeituras = [];
+                    jsonDados.forEach(linha => {
+                        const codigoFornecimento = linha["Codigo do Fornecimento"] || "";
+                        if (codigoFornecimento.toString().trim() !== "") {
+                            loteLeituras.push({
+                                tarefa_id: tarefaCriada.id,
+                                codigo: codigoFornecimento.toString(),
+                                endereco: linha["Endereço"] || "-",
+                                hidrometro: linha["Hidrômetro"] || "-",
+                                leitura_anterior: linha["Leitura anterior"] ? parseFloat(linha["Leitura anterior"]) : 0,
+                                status: 'pendente'
+                            });
+                        }
+                    });
+
+                    if (loteLeituras.length === 0) {
+                        alert("Nenhum registro válido estruturado foi localizado na planilha.");
+                        return;
+                    }
+
+                    const { error: erroLeituras } = await supabaseClient
+                        .from('leituras')
+                        .insert(loteLeituras);
+
+                    if (erroLeituras) throw erroLeituras;
+
+                    alert(`Sucesso total! Nova rota criada com ${loteLeituras.length} hidrômetros vinculados ao leiturista.`);
+                    arquivoInput.value = "";
+                    mudarAba('dashboard');
+
+                } catch (erro) {
+                    console.error(erro);
+                    alert("Erro na operação de envio: " + erro.message);
+                } finally {
+                    btnEnviar.innerText = "Gerar Tarefa e Enviar para Nuvem";
+                    btnEnviar.disabled = false;
+                }
+            };
+
+            leitor.readAsArrayBuffer(arquivo);
+        }
+
+        verificarSessao();
+    </script>
+</body>
+</html>
